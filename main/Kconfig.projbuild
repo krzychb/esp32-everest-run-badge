@@ -1,0 +1,36 @@
+menu "Blink setttings"
+
+config RED_BLINK_GPIO
+    int "Red blink GPIO number"
+	range 0 34
+	default 18
+	help
+		GPIO number (IOxx) to blink red.
+
+		Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
+
+		GPIOs 35-39 are input-only so cannot be used as outputs.
+
+config GREEN_BLINK_GPIO
+    int "Green blink GPIO number"
+	range 0 34
+	default 17
+	help
+		GPIO number (IOxx) to blink green.
+
+		Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
+
+		GPIOs 35-39 are input-only so cannot be used as outputs.
+
+config BLUE_BLINK_GPIO
+    int "Blue blink GPIO number"
+	range 0 34
+	default 16
+	help
+		GPIO number (IOxx) to blink blue.
+
+		Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
+
+		GPIOs 35-39 are input-only so cannot be used as outputs.
+
+endmenu

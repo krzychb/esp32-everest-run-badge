@@ -1,0 +1,11 @@
+menu "Posting data to ThinngSpeak"
+
+config THINGSPEAK_WRITE_API_KEY
+    string "ThindSpeak write API key"
+	default "1234567890123456"
+	help
+		API key obtained from 'https://thingspeak.com/' site.
+		
+		You need to set up a free account on this site first.
+
+endmenu

@@ -1,0 +1,11 @@
+menu "Wather data retreival from OpenWeatherMap"
+
+config OPENWEATHERMAP_API_KEY
+    string "OpenWeatherMap API key"
+	default "12345678901234567890123456789012"
+	help
+		API key obtained from 'https://home.openweathermap.org/' site.
+		
+		You need to set up a free account on this site first.
+
+endmenu
