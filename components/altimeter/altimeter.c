@@ -51,6 +51,7 @@ RTC_DATA_ATTR update_status ntp_update = {0};
 
 RTC_DATA_ATTR static unsigned long reference_pressure = 0l;
 RTC_DATA_ATTR static float altitude_climbed = 0.0;
+RTC_DATA_ATTR static float altitude_descent = 0.0;
 RTC_DATA_ATTR static float altitude_last; // last measurement for cumulative calculations
 RTC_DATA_ATTR altitude_data altitude_record = {0};
 
@@ -188,15 +189,20 @@ void measure_altitude()
 
     update_to_now(&altitude_update.time);
 
-    ESP_LOGI(TAG, "Altitude %0.1f m", altitude_record.altitude);
+    ESP_LOGI(TAG, "Absolute altitude %0.1f m", altitude_record.altitude);
 
     float altitude_delta = altitude_record.altitude - altitude_last;
     if (altitude_delta > ALTITUDE_DISRIMINATION) {
         altitude_climbed += altitude_delta;
-        altitude_last = altitude_record.altitude;
-        ESP_LOGI(TAG, "Altitude climbed  %0.1f m", altitude_climbed);
+        ESP_LOGD(TAG, "Altitude climbed  %0.1f m", altitude_climbed);
     }
+    if (altitude_delta < -ALTITUDE_DISRIMINATION) {
+        altitude_descent += altitude_delta;
+        ESP_LOGD(TAG, "Altitude descent  %0.1f m", altitude_descent);
+    }
+    altitude_last = altitude_record.altitude;
     altitude_record.altitude_climbed = altitude_climbed;
+    altitude_record.altitude_descent = altitude_descent;
 }
 
 void update_display()
@@ -211,19 +217,19 @@ void update_display()
 
     iot_epaper_clean_paint(display_device, UNCOLORED);
     iot_epaper_draw_string(display_device, 15,  10, "Pressure", &epaper_font_16, COLORED);
-    iot_epaper_draw_string(display_device, 15,  40, "Altitude", &epaper_font_16, COLORED);
-    iot_epaper_draw_string(display_device, 15,  70, "Temperature", &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 15,  40, "Climbed", &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 15,  70, "Descent", &epaper_font_16, COLORED);
     iot_epaper_draw_string(display_device, 15, 100, "Up Time", &epaper_font_16, COLORED);
 
     memset(value_str, 0x00, sizeof(value_str));
     sprintf(value_str, "%7lu Pa", altitude_record.pressure);
     iot_epaper_draw_string(display_device, 160,  10, value_str, &epaper_font_16, COLORED);
     memset(value_str, 0x00, sizeof(value_str));
-    sprintf(value_str, "%7.1f m", altitude_record.altitude);
+    sprintf(value_str, "%7.1f m", altitude_record.altitude_climbed);
     iot_epaper_draw_string(display_device, 160,  40, value_str, &epaper_font_16, COLORED);
 
     memset(value_str, 0x00, sizeof(value_str));
-    sprintf(value_str, "%7.1f C", altitude_record.temperature);
+    sprintf(value_str, "%7.1f m", altitude_record.altitude_descent);
     iot_epaper_draw_string(display_device, 160,  70, value_str, &epaper_font_16, COLORED);
 
     memset(value_str, 0x00, sizeof(value_str));

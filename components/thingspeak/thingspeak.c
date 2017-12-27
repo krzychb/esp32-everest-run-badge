@@ -101,7 +101,7 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     n = snprintf(NULL, 0, "%.1f", altitude_record->altitude);
     char field3[n+1];
     sprintf(field3, "%.1f", altitude_record->altitude);
-    // 4. Cumulative Altitude
+    // 4. Cumulative Altitude Climbed
     n = snprintf(NULL, 0, "%.1f", altitude_record->altitude_climbed);
     char field4[n+1];
     sprintf(field4, "%.1f", altitude_record->altitude_climbed);
@@ -109,7 +109,10 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     n = snprintf(NULL, 0, "%.1f", altitude_record->temperature);
     char field5[n+1];
     sprintf(field5, "%.1f", altitude_record->temperature);
-    // 6. Empty
+    // 6. Cumulative Altitude Descent
+    n = snprintf(NULL, 0, "%.1f", altitude_record->altitude_descent);
+    char field6[n+1];
+    sprintf(field6, "%.1f", altitude_record->altitude_descent);
     // 7. Empty
     // 8. Up Time
     n = snprintf(NULL, 0, "%lu", altitude_record->up_time);
@@ -118,13 +121,13 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
 
     // request string size calculation
     int string_size = strlen(get_request_start);
-    string_size += strlen("&fieldN=") * 6;  // number of fields
+    string_size += strlen("&fieldN=") * 7;  // number of fields
     string_size += strlen(field1);
     string_size += strlen(field2);
     string_size += strlen(field3);
     string_size += strlen(field4);
     string_size += strlen(field5);
-    // TBA field6
+    string_size += strlen(field6);
     // TBA field7
     string_size += strlen(field8);
     string_size += strlen(get_request_end);
@@ -143,8 +146,8 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     strcat(get_request, field4);
     strcat(get_request, "&field5=");
     strcat(get_request, field5);
-    // TBA field6
-    // TBA field6
+    strcat(get_request, "&field6=");
+    strcat(get_request, field6);
     // TBA field7
     // TBA field7
     strcat(get_request, "&field8=");

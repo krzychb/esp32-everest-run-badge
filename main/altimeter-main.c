@@ -33,7 +33,7 @@ RTC_DATA_ATTR static unsigned long boot_count = 0l;
 
 // Periods in seconds
 #define DEEP_SLEEP_PERIOD                    2
-#define DISPLAY_UPDATE_PERIOD                1
+#define DISPLAY_UPDATE_PERIOD                5
 #define ALTITUDE_UPDATE_PERIOD               5
 #define THINGSPEAK_UPDATE_PERIOD            15
 #define REFERENCE_PRESSURE_UPDATE_PERIOD   120
@@ -51,6 +51,7 @@ void app_main()
         ESP_LOGI(TAG, "First time boot");
         update_reference_pressure();
         //
+        // ToDo: Fix initial altitude climbed reading
         // ToDo: Retrieve current time from NTP
         //
     }
