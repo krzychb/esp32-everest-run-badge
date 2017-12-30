@@ -113,7 +113,10 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     n = snprintf(NULL, 0, "%.1f", altitude_record->altitude_descent);
     char field6[n+1];
     sprintf(field6, "%.1f", altitude_record->altitude_descent);
-    // 7. Empty
+    // 7. Battery Voltage
+    n = snprintf(NULL, 0, "%.3f", altitude_record->battery_voltage);
+    char field7[n+1];
+    sprintf(field7, "%.3f", altitude_record->battery_voltage);
     // 8. Up Time
     n = snprintf(NULL, 0, "%lu", altitude_record->up_time);
     char field8[n+1];
@@ -121,14 +124,14 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
 
     // request string size calculation
     int string_size = strlen(get_request_start);
-    string_size += strlen("&fieldN=") * 7;  // number of fields
+    string_size += strlen("&fieldN=") * 8;  // number of fields
     string_size += strlen(field1);
     string_size += strlen(field2);
     string_size += strlen(field3);
     string_size += strlen(field4);
     string_size += strlen(field5);
     string_size += strlen(field6);
-    // TBA field7
+    string_size += strlen(field7);
     string_size += strlen(field8);
     string_size += strlen(get_request_end);
     string_size += 1;  // '\0' - space for string termination character
@@ -148,8 +151,8 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     strcat(get_request, field5);
     strcat(get_request, "&field6=");
     strcat(get_request, field6);
-    // TBA field7
-    // TBA field7
+    strcat(get_request, "&field7=");
+    strcat(get_request, field7);
     strcat(get_request, "&field8=");
     strcat(get_request, field8);
     strcat(get_request, get_request_end);

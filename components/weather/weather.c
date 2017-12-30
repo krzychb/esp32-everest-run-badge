@@ -139,7 +139,7 @@ static void disconnected(uint32_t *args)
     bool weather_data_phrased = false;
 
     const char * response_body = find_response_body(client->proc_buf);
-    ESP_LOGI(TAG, "%s", response_body)
+    ESP_LOGV(TAG, "%s", response_body)
     if (response_body) {
         weather_data_phrased = process_response_body(response_body);
     } else {

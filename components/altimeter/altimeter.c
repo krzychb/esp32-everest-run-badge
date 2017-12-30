@@ -132,6 +132,21 @@ void update_reference_pressure(){
     }
 }
 
+void check_battery_voltage()
+{
+    badge_init();
+    bool bat_cs = badge_battery_charge_status();
+    int v_bat_raw = badge_battery_volt_sense();
+    int v_usb_raw = badge_usb_volt_sense();
+    float v_bat = v_bat_raw / 1000.0;
+    float v_usb = v_usb_raw / 1000.0;
+    altitude_record.battery_voltage = v_bat;
+
+    ESP_LOGI(TAG, "Charging: %s, Vusb %.3f V, Vbat %.3f V",
+            bat_cs ? "Yes" : "No", v_usb, v_bat);
+}
+
+
 void publish_altitude()
 {
     esp_err_t err;
@@ -139,6 +154,7 @@ void publish_altitude()
     ESP_LOGI(TAG, "Publishing to ThingSpeak");
     wifi_initialize();
     thinkgspeak_initialise();
+    check_battery_voltage();
     if (network_is_alive() == true) {
         err = thinkgspeak_post_data(&altitude_record);
         update_to_now(&thingspeak_update.time);
@@ -216,21 +232,21 @@ void update_display()
     iot_epaper_set_rotate(display_device, E_PAPER_ROTATE_270);
 
     iot_epaper_clean_paint(display_device, UNCOLORED);
-    iot_epaper_draw_string(display_device, 15,  10, "Pressure", &epaper_font_16, COLORED);
-    iot_epaper_draw_string(display_device, 15,  40, "Climbed", &epaper_font_16, COLORED);
-    iot_epaper_draw_string(display_device, 15,  70, "Descent", &epaper_font_16, COLORED);
-    iot_epaper_draw_string(display_device, 15, 100, "Up Time", &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 15,  10, "Pressure", &epaper_font_20, COLORED);
+    iot_epaper_draw_string(display_device, 15,  40, "Climbed", &epaper_font_20, COLORED);
+    iot_epaper_draw_string(display_device, 15,  70, "Descent", &epaper_font_20, COLORED);
+    iot_epaper_draw_string(display_device, 15, 100, "Up Time", &epaper_font_20, COLORED);
 
     memset(value_str, 0x00, sizeof(value_str));
     sprintf(value_str, "%7lu Pa", altitude_record.pressure);
-    iot_epaper_draw_string(display_device, 160,  10, value_str, &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 150,  10, value_str, &epaper_font_20, COLORED);
     memset(value_str, 0x00, sizeof(value_str));
     sprintf(value_str, "%7.1f m", altitude_record.altitude_climbed);
-    iot_epaper_draw_string(display_device, 160,  40, value_str, &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 150,  40, value_str, &epaper_font_20, COLORED);
 
     memset(value_str, 0x00, sizeof(value_str));
     sprintf(value_str, "%7.1f m", altitude_record.altitude_descent);
-    iot_epaper_draw_string(display_device, 160,  70, value_str, &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 150,  70, value_str, &epaper_font_20, COLORED);
 
     memset(value_str, 0x00, sizeof(value_str));
     update_to_now(&altitude_record.up_time);
@@ -238,13 +254,13 @@ void update_display()
     int minutes = (int) ((altitude_record.up_time / 60) % 60);
     int seconds = (int) (altitude_record.up_time % 60);
     sprintf(value_str, "%2d:%02d:%02d", hours, minutes, seconds);
-    iot_epaper_draw_string(display_device, 180, 100, value_str, &epaper_font_16, COLORED);
+    iot_epaper_draw_string(display_device, 170, 100, value_str, &epaper_font_20, COLORED);
 
-    iot_epaper_draw_horizontal_line(display_device, 10, 33, 275, COLORED);
-    iot_epaper_draw_horizontal_line(display_device, 10, 63, 275, COLORED);
-    iot_epaper_draw_horizontal_line(display_device, 10, 93, 275, COLORED);
+    iot_epaper_draw_horizontal_line(display_device, 5, 33, 290, COLORED);
+    iot_epaper_draw_horizontal_line(display_device, 5, 63, 290, COLORED);
+    iot_epaper_draw_horizontal_line(display_device, 5, 93, 290, COLORED);
     iot_epaper_draw_vertical_line(display_device, 150,  3, 120, COLORED);
-    iot_epaper_draw_rectangle(display_device, 10, 3, 285, 123, COLORED);
+    iot_epaper_draw_rectangle(display_device, 5, 3, 295, 123, COLORED);
 
     iot_epaper_display_frame(display_device, NULL);
     iot_epaper_sleep(display_device);

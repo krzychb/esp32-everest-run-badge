@@ -49,6 +49,7 @@ typedef struct {
     float altitude_climbed; /*!< Total altitude [meters] measured when climbing up */
     float altitude_descent; /*!< Total altitude [meters] measured when going down */
     float temperature;  /*!< Temperature [deg C] measured with BM180 */
+    float battery_voltage;  /*!< Battery voltage [V] of badge power supply */
     bool logged;  /*!< This record has been saved to logger before posting */
     unsigned long up_time;  /*!< Time in seconds since last reboot of ESP32 */
     time_t timestamp;  /*!< Data and time the altitude measurement was taken */
