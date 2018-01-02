@@ -17,6 +17,8 @@
 
 #include "badge_base.h"
 #include "badge_i2c.h"
+#include "badge_mpr121.h"
+#include "badge_power.h"
 #include "badge_bmp180.h"
 
 static const char* TAG = "BMP180 I2C Driver";
@@ -205,7 +207,7 @@ esp_err_t badge_bmp180_read_pressure(unsigned long* pressure)
             x1 = (x1 * 3038) >> 16;
             x2 = (-7357 * p) >> 16;
             p += (x1 + x2 + 3791) >> 4;
-            *pressure = (unsigned long) p;
+            *pressure = p;
         }
     }
 
@@ -239,11 +241,11 @@ esp_err_t badge_bmp180_init()
 
     ESP_LOGD(TAG, "init called");
 
-    esp_err_t err = badge_base_init();
+    esp_err_t err = badge_mpr121_init();
     if (err != ESP_OK)
         return err;
 
-    err = badge_i2c_init();
+    err = badge_power_sdcard_enable();
     if (err != ESP_OK)
         return err;
 
@@ -275,5 +277,6 @@ esp_err_t badge_bmp180_init()
     ESP_LOGD(TAG, "B1: %d, B2: %d, MB: %d, MC: %d, MD: %d", b1, b2, mb, mc, md);
 
     badge_bmp180_init_done = true;
+
     return ESP_OK;
 }

@@ -163,9 +163,7 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     //
     // printf("%d, %s\n", string_size, get_request);
 
-    gpio_set_level(BLUE_BLINK_GPIO, 1);
     esp_err_t err = http_client_request(&http_client, WEB_SERVER, get_request);
-    gpio_set_level(BLUE_BLINK_GPIO, 0);
     free(get_request);
 
     if (err != ESP_OK) {

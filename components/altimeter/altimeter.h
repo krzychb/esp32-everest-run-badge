@@ -16,18 +16,19 @@
 #include <time.h>
 #include "esp_sleep.h"
 
-
-/* Can run 'make menuconfig' to change defines below,
-   or you can edit the following line and set the values.
-*/
-#define RED_BLINK_GPIO CONFIG_RED_BLINK_GPIO
-#define GREEN_BLINK_GPIO CONFIG_GREEN_BLINK_GPIO
-#define BLUE_BLINK_GPIO CONFIG_BLUE_BLINK_GPIO
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct
+{
+    uint8_t green;
+    uint8_t red;
+    uint8_t blue;
+    uint8_t white;
+} led;
+
+extern led line[];
 
 typedef struct
 {
@@ -56,6 +57,7 @@ typedef struct {
 } altitude_data;
 
 void update_to_now(unsigned long* time);
+void leds_task(void *pvParameter);
 void update_reference_pressure();
 void publish_altitude();
 void measure_altitude();

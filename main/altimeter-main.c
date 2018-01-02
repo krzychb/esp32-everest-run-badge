@@ -26,6 +26,8 @@
 #include "weather.h"
 #include "thingspeak.h"
 
+#include "badge_power.h"
+
 
 static const char* TAG = "Main";
 
@@ -43,6 +45,8 @@ RTC_DATA_ATTR static unsigned long boot_count = 0l;
 void app_main()
 {
     ESP_LOGI(TAG, "Starting...");
+
+    xTaskCreate(&leds_task, "leds_task", 4 * 1024, NULL, 5, NULL);
 
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
     if (cause == ESP_SLEEP_WAKEUP_TIMER) {
@@ -100,6 +104,10 @@ void app_main()
         break;
     }
 
+    //
+    // ToDo: Introduce wakeup from touch
+    //
+    badge_power_leds_disable();
     ESP_LOGI(TAG, "Entering deep sleep for %d seconds", DEEP_SLEEP_PERIOD);
     esp_deep_sleep(1000000LL * DEEP_SLEEP_PERIOD);
 }

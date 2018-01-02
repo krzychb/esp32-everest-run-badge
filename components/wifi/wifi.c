@@ -20,6 +20,7 @@
 #include "esp_wifi.h"
 
 #include "wifi.h"
+#include "altimeter.h"
 
 static const char* TAG = "Wi-Fi";
 
@@ -41,14 +42,21 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     switch(event->event_id) {
     case SYSTEM_EVENT_STA_START:
+        line[3].red = 0;
+        line[3].blue = 40;
         esp_wifi_connect();
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
+        line[3].blue = 0;
+        line[3].green = 40;
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         /* This is a workaround as ESP32 WiFi libs don't currently
            auto-reassociate. */
+        line[3].blue = 0;
+        line[3].green = 0;
+        line[3].red = 40;
         esp_wifi_connect();
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         break;

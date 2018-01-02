@@ -189,7 +189,7 @@ static esp_err_t iot_epaper_spi_init(epaper_handle_t dev, spi_device_handle_t *e
         //Specify pre-transfer callback to handle D/C line
         .pre_cb = iot_epaper_pre_transfer_callback,
     };
-    ret = spi_bus_initialize(pin->spi_host, &buscfg, 1);
+    ret = spi_bus_initialize(pin->spi_host, &buscfg, 2);
     assert(ret == ESP_OK);
     ret = spi_bus_add_device(pin->spi_host, &devcfg, e_spi);
     assert(ret == ESP_OK);
@@ -542,7 +542,7 @@ void iot_epaper_draw_rectangle(epaper_handle_t dev, int x0, int y0, int x1, int 
 /**
  *  @brief: this draws a filled rectangle
  */
-void ior_epaper_draw_filled_rectangle(epaper_handle_t dev, int x0, int y0, int x1, int y1, int colored)
+void iot_epaper_draw_filled_rectangle(epaper_handle_t dev, int x0, int y0, int x1, int y1, int colored)
 {
     int min_x, min_y, max_x, max_y;
     int i;
