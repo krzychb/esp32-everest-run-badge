@@ -16,8 +16,6 @@
 #include "badge_leds.h"
 #include "badge_vibrator.h"
 #include "badge_sdcard.h"
-#include "badge_eink_dev.h"
-#include "badge_eink.h"
 #include "badge_nvs.h"
 
 static const char *TAG = "badge";
@@ -255,15 +253,6 @@ badge_init(void)
 	if (err != ESP_OK)
 	{
 		ESP_LOGE(TAG, "badge_sdcard_init failed: %d", err);
-	}
-
-	// configure eink display
-	uint8_t eink_type = BADGE_EINK_DEFAULT;
-	badge_nvs_get_u8("badge", "eink.dev.type", &eink_type);
-	err = badge_eink_init(eink_type);
-	if (err != ESP_OK)
-	{
-		ESP_LOGE(TAG, "badge_eink_init failed: %d", err);
 	}
 
 	badge_init_done = true;

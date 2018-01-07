@@ -2,7 +2,7 @@
  altimeter.h - Measure altitude with ESP32
 
  This file is part of the ESP32 Everest Run project
- https://github.com/krzychb/esp32-everest-run
+ https://github.com/krzychb/esp32-everest-run-badge
 
  Copyright (c) 2016 Krzysztof Budzynski <krzychb@gazeta.pl>
  This work is licensed under the Apache License, Version 2.0, January 2004
@@ -29,6 +29,7 @@
 #include "badge_bmp180.h"
 
 #include "altimeter.h"
+#include "polar-h7-client.h"
 #include "wifi.h"
 #include "weather.h"
 #include "thingspeak.h"
@@ -40,7 +41,15 @@
 
 static const char* TAG = "Altimeter";
 
+#define WEATHER_DATA_RETREIVAL_TIMEOUT      5
+#define HEART_RATE_RETREIVAL_TIMEOUT        5
+
 led line[6] = {0};
+
+/* Semaphore for voltage measurements
+ * that get distorted when flashing LEDs
+ */
+//static SemaphoreHandle_t now_flashing_leds;
 
 // Screen currently selected to be displayed
 RTC_DATA_ATTR static int active_screen;
@@ -48,6 +57,7 @@ RTC_DATA_ATTR static int active_screen;
 // Altitude measurement data to retain during deep sleep
 RTC_DATA_ATTR update_status display_update = {0};
 RTC_DATA_ATTR update_status altitude_update = {0};
+RTC_DATA_ATTR update_status heart_rate_update = {0};
 RTC_DATA_ATTR update_status thingspeak_update = {0};
 RTC_DATA_ATTR update_status reference_pressure_update = {0};
 RTC_DATA_ATTR update_status ntp_update = {0};
@@ -55,7 +65,6 @@ RTC_DATA_ATTR update_status ntp_update = {0};
 // Discriminate of altitude changes to calculate cumulative altitude climbed
 #define ALTITUDE_DISRIMINATION 1.6
 
-RTC_DATA_ATTR static unsigned long reference_pressure = 0l;
 RTC_DATA_ATTR static float altitude_climbed = 0.0;
 RTC_DATA_ATTR static float altitude_descent = 0.0;
 RTC_DATA_ATTR static float altitude_last; // last measurement for cumulative calculations
@@ -122,19 +131,19 @@ static void weather_data_retreived(uint32_t *args)
 {
     weather_data* weather = (weather_data*) args;
 
-    reference_pressure = (unsigned long) (weather->pressure * 100);
-    line[1].green = 0;
+    altitude_record.reference_pressure = (unsigned long) (weather->pressure * 100);
+    line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
     update_to_now(&reference_pressure_update.time);
-    ESP_LOGI(TAG, "Reference pressure: %lu Pa", reference_pressure);
+    ESP_LOGI(TAG, "Reference pressure: %lu Pa", altitude_record.reference_pressure);
 }
 
-void update_reference_pressure(){
+void update_reference_pressure(void){
 
     unsigned long last_update = reference_pressure_update.time;
 
     ESP_LOGI(TAG, "Updating reference pressure");
     wifi_initialize();
-    line[1].green = 40;
+    line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 40;
     initialise_weather_data_retrieval(60000);
     /* Period above is meant for updates in background
      * In this case module would normally go into deep sleep
@@ -143,68 +152,114 @@ void update_reference_pressure(){
     on_weather_data_retrieval(weather_data_retreived);
     ESP_LOGI(TAG, "Weather data retrieval initialized");
 
-    int count_down = 5;
+    int count_down = WEATHER_DATA_RETREIVAL_TIMEOUT;
     ESP_LOGI(TAG, "Waiting for reference pressure update...");
     while (reference_pressure_update.time == last_update) {
         ESP_LOGI(TAG, "Waiting %d", count_down);
         vTaskDelay(1000 / portTICK_RATE_MS);
         if (reference_pressure_update.time != last_update) {
             ESP_LOGI(TAG, "Update received");
-            line[1].green = 0;
+            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
             break;
         }
         if (--count_down == 0) {
-            if (reference_pressure == 0) {
-                reference_pressure = 101325l;
+            if (altitude_record.reference_pressure == 0) {
+                altitude_record.reference_pressure = 101325l;
                 // thingspeak_update.time is set in callback
                 ESP_LOGW(TAG, "Assumed standard pressure at the sea level");
             }
             reference_pressure_update.failures++;
             ESP_LOGW(TAG, "Exit waiting");
-            line[1].green = 0;
-            line[1].red = 40;
+            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
+            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].red = 40;
             break;
         }
     }
 }
 
-void publish_altitude()
+void publish_measurements(void)
 {
     esp_err_t err;
 
     ESP_LOGI(TAG, "Publishing to ThingSpeak");
     wifi_initialize();
-    line[2].green = 40;
+    line[CLOUD_POSTING_LED_INDEX].green = 40;
     thinkgspeak_initialise();
     if (network_is_alive() == true) {
         err = thinkgspeak_post_data(&altitude_record);
         update_to_now(&thingspeak_update.time);
         thingspeak_update.result = err;
         if (err != ESP_OK) {
-            line[2].red = 40;
+            line[CLOUD_POSTING_LED_INDEX].red = 40;
             ESP_LOGE(TAG, "Failed publishing altitude record to ThingSpeak, err = %d", err);
             thingspeak_update.failures++;
         } else {
-            line[2].green = 0;
+            line[CLOUD_POSTING_LED_INDEX].green = 0;
         }
     } else {
         ESP_LOGW(TAG, "Wi-Fi connection is missing");
     }
 }
 
+static void heart_rate_data_retreived(uint32_t *args)
+{
+    heart_rate_data* heart_rate_sensor = (heart_rate_data*) args;
+    altitude_record.heart_rate = heart_rate_sensor->heart_rate;
+    update_to_now(&heart_rate_update.time);
+    ESP_LOGI(TAG, "Heart rate: %d BPM", altitude_record.heart_rate);
+}
 
-void measure_altitude()
+void update_heart_rate(void){
+
+    ESP_LOGI(TAG, "Updating heart rate");
+
+    // Do not turn BT on when the Wi-Fi radio is active
+    // BT retrieval may take slower when Wi-FI is active as well
+    if (network_init_done() != true) {
+
+        unsigned long last_update = heart_rate_update.time;
+
+        line[HEART_RATE_UPDATE_LED_INDEX].blue = 40;
+        on_heart_rate_retrieval(heart_rate_data_retreived);
+        esp_err_t ret = initialise_heart_rate_retrieval();
+        if (ret){
+            ESP_LOGE(TAG, "Failed to initialize HR retrieval, error code = %x", ret);
+            line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
+            line[HEART_RATE_UPDATE_LED_INDEX].red = 40;
+        }
+
+        int count_down = HEART_RATE_RETREIVAL_TIMEOUT;
+        ESP_LOGI(TAG, "Waiting for heart rate update ...");
+        while (1) {
+            ESP_LOGI(TAG, "Waiting %d ...", count_down);
+            vTaskDelay(1000 / portTICK_RATE_MS);
+            if (heart_rate_update.time > last_update) {
+                line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
+                ESP_LOGI(TAG, "Update received");
+                break;
+            }
+            if (--count_down == 0) {
+                reference_pressure_update.failures++;
+                ESP_LOGW(TAG, "Exit waiting");
+                line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
+                line[HEART_RATE_UPDATE_LED_INDEX].red = 40;
+                break;
+            }
+        }
+    }
+}
+
+void measure_altitude(void)
 {
     esp_err_t err;
 
     ESP_LOGI(TAG, "Measuring altitude");
-    line[4].green = 40;
-    altitude_record.reference_pressure = reference_pressure;
+    line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 40;
 
     err = badge_bmp180_init();
     if(err != ESP_OK) {
-        line[4].green = 0;
-        line[4].red = 40;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
         altitude_update.failures++;
         altitude_update.result = err;
         ESP_LOGE(TAG, "Altitude measurement init failed with error = %d", err);
@@ -214,12 +269,12 @@ void measure_altitude()
 
     err  = badge_bmp180_read_pressure(&altitude_record.pressure);
     err |= badge_bmp180_read_temperature(&altitude_record.temperature);
-    err |= badge_bmp180_read_altitude(reference_pressure, &altitude_record.altitude);
+    err |= badge_bmp180_read_altitude(altitude_record.reference_pressure, &altitude_record.altitude);
     badge_power_sdcard_disable();
 
     if(err != ESP_OK) {
-        line[4].green = 0;
-        line[4].red = 40;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
         altitude_update.failures++;
         altitude_update.result = err;
         ESP_LOGE(TAG, "Altitude measurement failed with error = %d", err);
@@ -244,8 +299,9 @@ void measure_altitude()
     altitude_record.altitude_descent = altitude_descent;
 }
 
-void check_battery_voltage()
+void check_battery_voltage(void)
 {
+
     badge_power_init();
     bool bat_cs = badge_battery_charge_status();
     int v_bat_raw = badge_battery_volt_sense();
@@ -258,7 +314,7 @@ void check_battery_voltage()
             bat_cs ? "Yes" : "No", v_usb, v_bat);
 }
 
-void update_display()
+void update_display(void)
 {
     char value_str[10];
 
@@ -267,7 +323,11 @@ void update_display()
     //
     // ToDo: put battery voltage check in more obvious place
     //
-    check_battery_voltage();
+    // Do not measure when network is on
+    //
+    if (network_init_done() != true) {
+        check_battery_voltage();
+    }
 
     display_device = iot_epaper_create(NULL, &epaper_conf);
     iot_epaper_set_rotate(display_device, E_PAPER_ROTATE_270);
@@ -317,14 +377,14 @@ void update_display()
     //
     // ToDo: add error tracking
     //
-    // NTP Icon
-    failure_state = true;
+    // HRM Icon
+    failure_state = heart_rate_update.result;
     if (failure_state) {
         iot_epaper_draw_filled_rectangle(display_device, 262, 0, 287, 12, COLORED);
     } else {
         iot_epaper_draw_rectangle(display_device, 262, 0, 287, 12, COLORED);
     }
-    iot_epaper_draw_string(display_device, 265,  1, "NTP", &epaper_font_12, failure_state ? UNCOLORED : COLORED);
+    iot_epaper_draw_string(display_device, 265,  1, "HRM", &epaper_font_12, failure_state ? UNCOLORED : COLORED);
 
     switch (active_screen) {
         case 0:
@@ -380,6 +440,54 @@ void update_display()
             iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
             break;
         case 2:
+            iot_epaper_draw_string(display_device, 7,  25, "Heart Rate", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  52, "-", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  79, "-", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7, 106, "-", &epaper_font_20, COLORED);
+
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6d BPM", altitude_record.heart_rate);
+            iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6d -", 0);
+            iot_epaper_draw_string(display_device, 155,  52, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6d -", 0);
+            iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6d -", 0);
+            iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
+
+            iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
+            iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
+            iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
+            iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
+            break;
+        case 3:
+            iot_epaper_draw_string(display_device, 7,  25, "BMP 180", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  52, "Polar H7 HRS", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  79, "ThingSpeak", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7, 106, "OpenWeather", &epaper_font_20, COLORED);
+
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6lu Err", altitude_update.failures);
+            iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6lu Err", heart_rate_update.failures);
+            iot_epaper_draw_string(display_device, 155,  52, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6lu Err", thingspeak_update.failures);
+            iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6lu Err", reference_pressure_update.failures);
+            iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
+
+            iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
+            iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
+            iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
+            iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
+            break;
+        case 4:
             iot_epaper_draw_string(display_device, 80,  52, "Screen", &epaper_font_24, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
             sprintf(value_str, "%d", active_screen);
@@ -394,7 +502,7 @@ void update_display()
     iot_epaper_sleep(display_device);
 
     active_screen++;
-    if (active_screen > 1) {
+    if (active_screen > 3) {
         active_screen = 0;
     }
 

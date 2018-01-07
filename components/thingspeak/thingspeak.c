@@ -106,9 +106,9 @@ esp_err_t thinkgspeak_post_data(altitude_data *altitude_record)
     char field4[n+1];
     sprintf(field4, "%.1f", altitude_record->altitude_climbed);
     // 5. Temperature
-    n = snprintf(NULL, 0, "%.1f", altitude_record->temperature);
+    n = snprintf(NULL, 0, "%d", altitude_record->heart_rate);
     char field5[n+1];
-    sprintf(field5, "%.1f", altitude_record->temperature);
+    sprintf(field5, "%d", altitude_record->heart_rate);
     // 6. Cumulative Altitude Descent
     n = snprintf(NULL, 0, "%.1f", altitude_record->altitude_descent);
     char field6[n+1];

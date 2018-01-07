@@ -22,6 +22,7 @@ extern const int CONNECTED_BIT;
 
 esp_err_t wifi_initialize(void);
 bool network_is_alive(void);
+bool network_init_done(void);
 
 #ifdef __cplusplus
 }

@@ -20,6 +20,7 @@
 #include "esp_wifi.h"
 
 #include "wifi.h"
+#include "lwip/sockets.h"
 #include "altimeter.h"
 
 static const char* TAG = "Wi-Fi";
@@ -29,6 +30,8 @@ static const char* TAG = "Wi-Fi";
 */
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
+
+static bool wifi_init_done = false;
 
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 EventGroupHandle_t wifi_event_group;
@@ -42,21 +45,21 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     switch(event->event_id) {
     case SYSTEM_EVENT_STA_START:
-        line[3].red = 0;
-        line[3].blue = 40;
+        line[WIFI_ACTIVITY_LED_INDEX].red = 0;
+        line[WIFI_ACTIVITY_LED_INDEX].blue = 40;
         esp_wifi_connect();
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
-        line[3].blue = 0;
-        line[3].green = 40;
+        line[WIFI_ACTIVITY_LED_INDEX].blue = 0;
+        line[WIFI_ACTIVITY_LED_INDEX].green = 40;
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         /* This is a workaround as ESP32 WiFi libs don't currently
            auto-reassociate. */
-        line[3].blue = 0;
-        line[3].green = 0;
-        line[3].red = 40;
+        line[WIFI_ACTIVITY_LED_INDEX].blue = 0;
+        line[WIFI_ACTIVITY_LED_INDEX].green = 0;
+        line[WIFI_ACTIVITY_LED_INDEX].red = 40;
         esp_wifi_connect();
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         break;
@@ -69,8 +72,6 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 esp_err_t wifi_initialize(void)
 {
 
-    static bool wifi_init_done = false;
-
     if (wifi_init_done) {
         return ESP_OK;
     }
@@ -79,6 +80,7 @@ esp_err_t wifi_initialize(void)
     ESP_ERROR_CHECK( nvs_flash_init() );
 
     tcpip_adapter_init();
+
     wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_init(event_handler, NULL) );
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -117,4 +119,17 @@ bool network_is_alive(void)
     } else {
         return false;
     }
+}
+
+
+/**
+@brief Check if Wi-Fi intt has been done
+
+@return
+    - true - yes, init has been done
+    - false - no, init has not been done
+*/
+bool network_init_done(void)
+{
+    return wifi_init_done;
 }

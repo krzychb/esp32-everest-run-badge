@@ -37,6 +37,7 @@ RTC_DATA_ATTR static unsigned long boot_count = 0l;
 #define DEEP_SLEEP_PERIOD                    2
 #define DISPLAY_UPDATE_PERIOD                5
 #define ALTITUDE_UPDATE_PERIOD               5
+#define HEART_RATE_UPDATE_PERIOD            15
 #define THINGSPEAK_UPDATE_PERIOD            15
 #define REFERENCE_PRESSURE_UPDATE_PERIOD   120
 #define NTP_UPDATE_PERIOD                  000
@@ -84,7 +85,12 @@ void app_main()
 
         // ThingSpeak Update
         if (module_time.tv_sec > thingspeak_update.time + THINGSPEAK_UPDATE_PERIOD) {
-            publish_altitude();
+            publish_measurements();
+        }
+
+        // Heart Rate Update
+        if (module_time.tv_sec > heart_rate_update.time + ALTITUDE_UPDATE_PERIOD) {
+            update_heart_rate();
         }
 
         // Altitude Measurement

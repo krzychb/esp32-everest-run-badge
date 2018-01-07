@@ -28,6 +28,12 @@ typedef struct
     uint8_t white;
 } led;
 
+#define ALTITUDE_MEASUREMENT_LED_INDEX      4
+#define WIFI_ACTIVITY_LED_INDEX             3
+#define CLOUD_POSTING_LED_INDEX             2
+#define REF_PRESSURE_RETREIEVAL_LED_INDEX   1
+#define HEART_RATE_UPDATE_LED_INDEX         0
+
 extern led line[];
 
 typedef struct
@@ -39,6 +45,7 @@ typedef struct
 
 extern RTC_DATA_ATTR update_status display_update;
 extern RTC_DATA_ATTR update_status altitude_update;
+extern RTC_DATA_ATTR update_status heart_rate_update;
 extern RTC_DATA_ATTR update_status thingspeak_update;
 extern RTC_DATA_ATTR update_status reference_pressure_update;
 extern RTC_DATA_ATTR update_status ntp_update;
@@ -49,6 +56,7 @@ typedef struct {
     float altitude;  /*!< Altitude [meters] measured with BM180 and compensated to the sea level pressure */
     float altitude_climbed; /*!< Total altitude [meters] measured when climbing up */
     float altitude_descent; /*!< Total altitude [meters] measured when going down */
+    int heart_rate; /*!< Heart rate obtained from a sensor */
     float temperature;  /*!< Temperature [deg C] measured with BM180 */
     float battery_voltage;  /*!< Battery voltage [V] of badge power supply */
     bool logged;  /*!< This record has been saved to logger before posting */
@@ -58,10 +66,11 @@ typedef struct {
 
 void update_to_now(unsigned long* time);
 void leds_task(void *pvParameter);
-void update_reference_pressure();
-void publish_altitude();
-void measure_altitude();
-void update_display();
+void update_reference_pressure(void);
+void publish_measurements(void);
+void update_heart_rate(void);
+void measure_altitude(void);
+void update_display(void);
 
 #ifdef __cplusplus
 }
