@@ -35,12 +35,12 @@ RTC_DATA_ATTR static unsigned long boot_count = 0l;
 
 // Periods in seconds
 #define DEEP_SLEEP_PERIOD                    2
+#define BATTERY_VOLTAGE_UPDATE_PERIOD        5
 #define DISPLAY_UPDATE_PERIOD                5
 #define ALTITUDE_UPDATE_PERIOD               5
 #define HEART_RATE_UPDATE_PERIOD            15
 #define THINGSPEAK_UPDATE_PERIOD            15
 #define REFERENCE_PRESSURE_UPDATE_PERIOD   120
-#define NTP_UPDATE_PERIOD                  000
 
 
 void app_main()
@@ -69,13 +69,9 @@ void app_main()
         gettimeofday(&module_time, NULL);
         ESP_LOGI(TAG, "Module time %lu s", module_time.tv_sec);
 
-        // Update Time with NTP
-        if (module_time.tv_sec > ntp_update.time + NTP_UPDATE_PERIOD) {
-            ESP_LOGI(TAG, "Updating time with NTP");
-            //
-            // ToDo: Perform the action above
-            //
-            update_to_now(&ntp_update.time);
+        // Measure battery voltage before Wi-Fi or BLE is on
+        if (module_time.tv_sec > battery_voltage_update.time + BATTERY_VOLTAGE_UPDATE_PERIOD) {
+            measure_battery_voltage();
         }
 
         // Reference Pressure Update

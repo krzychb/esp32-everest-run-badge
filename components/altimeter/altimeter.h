@@ -43,6 +43,7 @@ typedef struct
     esp_err_t result;
 } update_status;
 
+extern RTC_DATA_ATTR update_status battery_voltage_update;
 extern RTC_DATA_ATTR update_status display_update;
 extern RTC_DATA_ATTR update_status altitude_update;
 extern RTC_DATA_ATTR update_status heart_rate_update;
@@ -59,6 +60,7 @@ typedef struct {
     int heart_rate; /*!< Heart rate obtained from a sensor */
     float temperature;  /*!< Temperature [deg C] measured with BM180 */
     float battery_voltage;  /*!< Battery voltage [V] of badge power supply */
+    bool battery_charging;  /*!< Whether battery is being charged */
     bool logged;  /*!< This record has been saved to logger before posting */
     unsigned long up_time;  /*!< Time in seconds since last reboot of ESP32 */
     time_t timestamp;  /*!< Data and time the altitude measurement was taken */
@@ -66,6 +68,7 @@ typedef struct {
 
 void update_to_now(unsigned long* time);
 void leds_task(void *pvParameter);
+void measure_battery_voltage(void);
 void update_reference_pressure(void);
 void publish_measurements(void);
 void update_heart_rate(void);

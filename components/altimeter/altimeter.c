@@ -46,21 +46,16 @@ static const char* TAG = "Altimeter";
 
 led line[6] = {0};
 
-/* Semaphore for voltage measurements
- * that get distorted when flashing LEDs
- */
-//static SemaphoreHandle_t now_flashing_leds;
-
 // Screen currently selected to be displayed
 RTC_DATA_ATTR static int active_screen;
 
-// Altitude measurement data to retain during deep sleep
+// Measurement data to retain during deep sleep
+RTC_DATA_ATTR update_status battery_voltage_update = {0};
 RTC_DATA_ATTR update_status display_update = {0};
 RTC_DATA_ATTR update_status altitude_update = {0};
 RTC_DATA_ATTR update_status heart_rate_update = {0};
 RTC_DATA_ATTR update_status thingspeak_update = {0};
 RTC_DATA_ATTR update_status reference_pressure_update = {0};
-RTC_DATA_ATTR update_status ntp_update = {0};
 
 // Discriminate of altitude changes to calculate cumulative altitude climbed
 #define ALTITUDE_DISRIMINATION 1.6
@@ -299,19 +294,21 @@ void measure_altitude(void)
     altitude_record.altitude_descent = altitude_descent;
 }
 
-void check_battery_voltage(void)
+void measure_battery_voltage(void)
 {
+    ESP_LOGI(TAG, "Measuring battery voltage");
 
     badge_power_init();
-    bool bat_cs = badge_battery_charge_status();
+    altitude_record.battery_charging = badge_battery_charge_status();
     int v_bat_raw = badge_battery_volt_sense();
     int v_usb_raw = badge_usb_volt_sense();
     float v_bat = v_bat_raw / 1000.0;
     float v_usb = v_usb_raw / 1000.0;
     altitude_record.battery_voltage = v_bat;
+    update_to_now(&battery_voltage_update.time);
 
     ESP_LOGI(TAG, "Charging: %s, Vusb %.3f V, Vbat %.3f V",
-            bat_cs ? "Yes" : "No", v_usb, v_bat);
+            altitude_record.battery_charging ? "Yes" : "No", v_usb, v_bat);
 }
 
 void update_display(void)
@@ -319,15 +316,6 @@ void update_display(void)
     char value_str[10];
 
     ESP_LOGI(TAG, "Updating display");
-
-    //
-    // ToDo: put battery voltage check in more obvious place
-    //
-    // Do not measure when network is on
-    //
-    if (network_init_done() != true) {
-        check_battery_voltage();
-    }
 
     display_device = iot_epaper_create(NULL, &epaper_conf);
     iot_epaper_set_rotate(display_device, E_PAPER_ROTATE_270);
@@ -441,7 +429,7 @@ void update_display(void)
             break;
         case 2:
             iot_epaper_draw_string(display_device, 7,  25, "Heart Rate", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7,  52, "-", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  52, "Battery Charging", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7,  79, "-", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7, 106, "-", &epaper_font_20, COLORED);
 
@@ -449,8 +437,8 @@ void update_display(void)
             sprintf(value_str, "%6d BPM", altitude_record.heart_rate);
             iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%6d -", 0);
-            iot_epaper_draw_string(display_device, 155,  52, value_str, &epaper_font_20, COLORED);
+            sprintf(value_str, "%s", altitude_record.battery_charging ? "Yes" : "No");
+            iot_epaper_draw_string(display_device, 253,  52, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
             sprintf(value_str, "%6d -", 0);
             iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
@@ -464,8 +452,8 @@ void update_display(void)
             iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
             break;
         case 3:
-            iot_epaper_draw_string(display_device, 7,  25, "BMP 180", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7,  52, "Polar H7 HRS", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  25, "BMP180", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  52, "Polar H7", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7,  79, "ThingSpeak", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7, 106, "OpenWeather", &epaper_font_20, COLORED);
 

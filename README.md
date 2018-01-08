@@ -2,13 +2,13 @@
 
 Internet connected altimeter for Everest Run - http://everestrun.pl/
 
-This is continuation of similar project [esp32-everest-run](https://github.com/krzychb/esp32-everest-run) using new hardware.
-
+This is continuation of similar project [esp32-everest-run](https://github.com/krzychb/esp32-everest-run) using new hardware. Please check original project's [log book](https://github.com/krzychb/esp32-everest-run/blob/master/log-book.md) for the short story why I am developing it.
 
 ## Components
 
 * [SHA2017 Badge](https://twitter.com/sha2017badge), a great piece of hardware developed for SHA2017 hacker camp/conference that took place in The Netherlands in 2017
 * [BMP180](https://www.bosch-sensortec.com/bst/products/all_products/bmp180) Barmoetric Pressure Sensor
+* [Polar H7](http://www.trustedreviews.com/reviews/polar-h7-heart-rate-sensor) Polar H7 Heart Rate Sensor with Bluetooth
 * [esp-idf](https://github.com/espressif/esp-idf) Espressif IoT Development Framework for ESP32
 
 ## Build Status
@@ -27,7 +27,31 @@ You can compile and upload code to ESP32 from command line with [make](http://es
 
 If this is you first exposure to ESP32 and [esp-idf](https://github.com/espressif/esp-idf), then get familiar with [hello_world](https://github.com/espressif/esp-idf/tree/master/examples/get-started/hello_world) and [blink](https://github.com/espressif/esp-idf/tree/master/examples/get-started/blink) examples. In next step check more advanced examples that have been specifically used to prepare this application: [http_request](https://github.com/espressif/esp-idf/tree/master/examples/protocols/http_request) and [sntp](https://github.com/espressif/esp-idf/tree/master/examples/protocols/sntp).
 
-Compilation and upload of this application is done in the same way like the above examples. To make testing more convenient you can use [ESP-WROVER-KIT](https://espressif.com/en/products/hardware/esp-wrover-kit/overview) that has micro-sd card slot installed.
+Compilation and upload of this application is done in the same way like the above examples.
+
+## Application Software Overview
+
+This application is performing measurements and calculations every couple of seconds. Results are then displayed on the badge and send to the cloud. When not doing any of theses tasks, the ESP32 is put to sleep mode to save the battery power. The functions representing tasks executed after wakeup are listed in `app_main()` of [main/altimeter-main.c](main/altimeter-main.c) source file:
+
+* `update_reference_pressure()` - retrieval of atmospheric reference pressure from [api.openweathermap.org](http://openweathermap.org/api) service. This reference pressure is one of input parameters to calculate the altitude.
+* `measure_altitude()` - calculation of the altitude basing on pressure value read from the BMP180 sensor and the reference atmospheric pressure.
+* `update_heart_rate()` - retrieval of the heart rate from Polar H7 Heart Rate Monitor.
+* `measure_battery_voltage()` - measure the battery voltage and charging status.
+* `update_display()` - update of badge's display to show the altitude climbed, heart rate, up time, as well as couple of other parameters that represent measurements or communication error rates.
+* `publish_measurements()` - send the key measurements to ThinkSpeak cloud service.
+
+On a slightly lower level, execution of the above functions is implemented using couple of ESP-IDF components listed in [components](components) folder:
+
+* [altimeter](components/altimeter) - this components contains implementation of the above functions
+* [badge](components/badge) - drivers for the badge hardware like ePaper display, MPR121 Proximity Capacitive Touch
+Sensor Controller, SPI driven LEDs, vibrator motor, etc.
+* [badge_bmp180](components/badge_bmp180) - driver to read BMP180 Barometric Pressure Sensor connected to the extension port of the badge
+* [epaper-29-dke](components/epaper-29-dke) - driver for the ePaper display integrated into the badge
+* [http](components/http) - http client to manage communication with cloud services like OpenWeatherMap or ThingSpeak
+* [polar-h7-client](components/polar-h7-client) - BLE (Bluetooth Low Energy) driver to retrieve heart rate measurements from the Polar H7 sensor
+* [thingspeak](components/thingspeak) - application to send data to [ThinkSpeak](https://thingspeak.com/channels/208884) cloud service
+* [weather](components/weather) - application to retrieve reference pressure for [OpenWeatherMap](http://openweathermap.org/api) service
+* [wifi](components/wifi) - routines to set up and manage Wi-Fi connection of the ESP32
 
 ## Acknowledgments
 
