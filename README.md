@@ -69,9 +69,24 @@ Sensor Controller, SPI driven LEDs, vibrator motor, etc.
 |:---:|:---:|
 | Heart Rate screen | Communication Errors screen |
 
-| ![alt text](pictures/sha2017-badge-back.jpg "SHA2017 Badge back") | ![alt text](pictures/bmp180-sensor-mounting.jpg "BMP Barometric Pressure Sensor mounting") |
+| ![alt text](pictures/sha2017-badge-back.jpg "SHA2017 Badge back") | ![alt text](pictures/bmp180-sensor-mounting.jpg "BMP180 Barometric Pressure Sensor mounting") |
 |:---:|:---:|
 | SHA2017 Badge back | BMP Barometric Pressure Sensor mounting |
+
+## Typical Measurements
+
+Charts below present measurements when climbing InterContinetal hotel in Warsaw. The start is at floor -5 and finish at floor 43, the total of 48 floors. I made this distance 7 times. I was going down with an elevator except one time when I decided to walk. This is visible on chart "Altitude" as fourth peak from the left. 
+
+![alt text](pictures/thingspeak-altitude-heart-rate.png "Sample measurement of altitude and heart rate")
+
+Total altitude climbed and descent is shown on next two charts below.
+
+![alt text](pictures/thingspeak-altitude-climbed-descent.png "Sample measurement of total altitude climbed and descent")
+
+The last two charts present application up time and battery voltage.
+
+![alt text](pictures/thingspeak-up-time-battery-voltage.png "Sample measurement of application up time and battery voltage")
+
 
 ## Acknowledgments
 
