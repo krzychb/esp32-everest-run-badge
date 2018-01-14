@@ -28,7 +28,6 @@
 
 #include "badge_power.h"
 
-
 static const char* TAG = "Main";
 
 RTC_DATA_ATTR static unsigned long boot_count = 0l;
@@ -47,8 +46,6 @@ void app_main()
 {
     ESP_LOGI(TAG, "Starting...");
 
-    xTaskCreate(&leds_task, "leds_task", 4 * 1024, NULL, 5, NULL);
-
     esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
     if (cause == ESP_SLEEP_WAKEUP_TIMER) {
         ESP_LOGI(TAG, "Wakeup by timer");
@@ -56,13 +53,22 @@ void app_main()
         ESP_LOGI(TAG, "First time boot");
         update_reference_pressure();
         //
-        // ToDo: Fix initial altitude climbed reading
+        // Initialize reading of altitude climbed / descent
+        //
+        initialize_altitude_measurement();
+        //
         // ToDo: Retrieve current time from NTP
         //
+        update_display(1);
     }
 
-    ESP_LOGI(TAG, "Module boot count: %lu", boot_count);
-    boot_count++;
+    //
+    // ToDo: Move leds_task up to see "First time boot" progress
+    //
+    xTaskCreate(&leds_task, "leds_task", 4 * 1024, NULL, 5, NULL);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "Module boot count: %lu", boot_count++);
 
     while(1) {
         struct timeval module_time;
@@ -96,7 +102,7 @@ void app_main()
 
         // Update Screen
         if (module_time.tv_sec > display_update.time + DISPLAY_UPDATE_PERIOD) {
-            update_display();
+            update_display(-1);
         }
 
         // Handle Touch Pad Events

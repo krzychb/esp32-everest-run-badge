@@ -59,11 +59,18 @@ RTC_DATA_ATTR update_status reference_pressure_update = {0};
 
 // Discriminate of altitude changes to calculate cumulative altitude climbed
 #define ALTITUDE_DISRIMINATION 1.6
-
-RTC_DATA_ATTR static float altitude_climbed = 0.0;
-RTC_DATA_ATTR static float altitude_descent = 0.0;
 RTC_DATA_ATTR static float altitude_last; // last measurement for cumulative calculations
 RTC_DATA_ATTR altitude_data altitude_record = {0};
+
+// Discriminate of altitude changes for climb top/down counting
+#define CLIMB_COUNT_ALTITUDE_DISRIMINATION 10.5
+
+#define CLIMB_COUNT_STATE_START       0x00
+#define CLIMB_COUNT_STATE_GOING_UP    0x10
+#define CLIMB_COUNT_STATE_GOING_DOWN  0x20
+
+RTC_DATA_ATTR int climb_count_state = CLIMB_COUNT_STATE_START;
+RTC_DATA_ATTR static float climb_count_altitude_last; // last measurement for climb count calculation
 
 epaper_handle_t display_device = NULL;
 
@@ -100,15 +107,13 @@ void update_to_now(unsigned long* time)
 void leds_task(void *pvParameter)
 {
     esp_err_t err = badge_leds_init();
-
-    led show_line[6] = {0};
-    led led_off = {0};
-
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to initialize leds task, error: %d", err);
-        while(1);
     }
+
+    led show_line[6] = {0};
+    led led_off = {0};
 
     while(1){
         for (int i=0; i<6; i++){
@@ -252,6 +257,7 @@ void measure_altitude(void)
     line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 40;
 
     err = badge_bmp180_init();
+
     if(err != ESP_OK) {
         line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
         line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
@@ -262,9 +268,12 @@ void measure_altitude(void)
         return;
     }
 
-    err  = badge_bmp180_read_pressure(&altitude_record.pressure);
-    err |= badge_bmp180_read_temperature(&altitude_record.temperature);
-    err |= badge_bmp180_read_altitude(altitude_record.reference_pressure, &altitude_record.altitude);
+    unsigned long pressure;
+    float temperature;
+    float altitude;
+    err  = badge_bmp180_read_pressure(&pressure);
+    err |= badge_bmp180_read_temperature(&temperature);
+    err |= badge_bmp180_read_altitude(altitude_record.reference_pressure, &altitude);
     badge_power_sdcard_disable();
 
     if(err != ESP_OK) {
@@ -276,22 +285,64 @@ void measure_altitude(void)
         return;
     }
 
+    //
+    // To Do: track potential issue with BMP180 measurement corruption
+    //
+    if (pressure < 92000 || pressure > 107000) {
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
+        altitude_update.failures++;
+        ESP_LOGE(TAG, "Pressure range error! (%lu Pa)", pressure);
+        return;
+    }
+
+    altitude_record.pressure = pressure;
+    altitude_record.temperature = temperature;
+    altitude_record.altitude = altitude;
     update_to_now(&altitude_update.time);
 
     ESP_LOGI(TAG, "Absolute altitude %0.1f m", altitude_record.altitude);
 
     float altitude_delta = altitude_record.altitude - altitude_last;
     if (altitude_delta > ALTITUDE_DISRIMINATION) {
-        altitude_climbed += altitude_delta;
-        ESP_LOGD(TAG, "Altitude climbed  %0.1f m", altitude_climbed);
+        altitude_record.altitude_climbed += altitude_delta;
+        altitude_last = altitude_record.altitude;
+        ESP_LOGD(TAG, "Altitude climbed %0.1f m", altitude_record.altitude_climbed);
     }
-    if (altitude_delta < -ALTITUDE_DISRIMINATION) {
-        altitude_descent += altitude_delta;
-        ESP_LOGD(TAG, "Altitude descent  %0.1f m", altitude_descent);
+    else if (altitude_delta < -ALTITUDE_DISRIMINATION) {
+        altitude_record.altitude_descent += altitude_delta;
+        altitude_last = altitude_record.altitude;
+        ESP_LOGD(TAG, "Altitude descent %0.1f m", altitude_record.altitude_descent);
+    } else {
+        ESP_LOGW(TAG, "Altitude change is within +/- %0.1f from %0.1f m", ALTITUDE_DISRIMINATION, altitude_last);
     }
-    altitude_last = altitude_record.altitude;
-    altitude_record.altitude_climbed = altitude_climbed;
-    altitude_record.altitude_descent = altitude_descent;
+
+    altitude_delta = altitude_record.altitude - climb_count_altitude_last;
+    if (altitude_delta > CLIMB_COUNT_ALTITUDE_DISRIMINATION) {
+        climb_count_altitude_last = altitude_record.altitude;
+        if (climb_count_state == CLIMB_COUNT_STATE_GOING_DOWN || climb_count_state == CLIMB_COUNT_STATE_START){
+            climb_count_state = CLIMB_COUNT_STATE_GOING_UP;
+            altitude_record.climb_count_top++;
+        }
+    }
+    if (altitude_delta < -CLIMB_COUNT_ALTITUDE_DISRIMINATION) {
+        climb_count_altitude_last = altitude_record.altitude;
+        if (climb_count_state == CLIMB_COUNT_STATE_GOING_UP || climb_count_state == CLIMB_COUNT_STATE_START){
+            climb_count_state = CLIMB_COUNT_STATE_GOING_DOWN;
+            altitude_record.climb_count_down++;
+        }
+    }
+}
+
+void initialize_altitude_measurement(void)
+{
+    ESP_LOGI(TAG, "Initializing altitude measurement");
+    measure_altitude();
+    altitude_record.altitude_climbed = 0.0;
+    altitude_record.altitude_descent = 0.0;
+    ESP_LOGD(TAG, "Initial altitude %0.1f m", altitude_last);
+    altitude_record.climb_count_top = 0;
+    altitude_record.climb_count_down = 0;
 }
 
 void measure_battery_voltage(void)
@@ -311,13 +362,22 @@ void measure_battery_voltage(void)
             altitude_record.battery_charging ? "Yes" : "No", v_usb, v_bat);
 }
 
-void update_display(void)
+void update_display(int screen_number_to_show)
 {
     char value_str[10];
 
-    ESP_LOGI(TAG, "Updating display");
+    if (screen_number_to_show != -1){
+        active_screen = screen_number_to_show;
+    }
+    ESP_LOGI(TAG, "Updating display to show screen %d", active_screen);
 
-    display_device = iot_epaper_create(NULL, &epaper_conf);
+    static bool display_init_done = false;
+
+    if (display_init_done == false) {
+        display_device = iot_epaper_create(NULL, &epaper_conf);
+        display_init_done = true;
+    }
+
     iot_epaper_set_rotate(display_device, E_PAPER_ROTATE_270);
     iot_epaper_clean_paint(display_device, UNCOLORED);
 
@@ -430,8 +490,8 @@ void update_display(void)
         case 2:
             iot_epaper_draw_string(display_device, 7,  25, "Heart Rate", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7,  52, "Battery Charging", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7,  79, "-", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7, 106, "-", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  79, "Climb Top", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7, 106, "Climb Down", &epaper_font_20, COLORED);
 
             memset(value_str, 0x00, sizeof(value_str));
             sprintf(value_str, "%6d BPM", altitude_record.heart_rate);
@@ -440,10 +500,10 @@ void update_display(void)
             sprintf(value_str, "%s", altitude_record.battery_charging ? "Yes" : "No");
             iot_epaper_draw_string(display_device, 253,  52, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%6d -", 0);
+            sprintf(value_str, "%6d -", altitude_record.climb_count_top);
             iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%6d -", 0);
+            sprintf(value_str, "%6d -", altitude_record.climb_count_down);
             iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
 
             iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);

@@ -57,6 +57,8 @@ typedef struct {
     float altitude;  /*!< Altitude [meters] measured with BM180 and compensated to the sea level pressure */
     float altitude_climbed; /*!< Total altitude [meters] measured when climbing up */
     float altitude_descent; /*!< Total altitude [meters] measured when going down */
+    int climb_count_top; /*!< Number of times reaching certain height when going up */
+    int climb_count_down; /*!< Number of times reaching certain height when going down */
     int heart_rate; /*!< Heart rate obtained from a sensor */
     float temperature;  /*!< Temperature [deg C] measured with BM180 */
     float battery_voltage;  /*!< Battery voltage [V] of badge power supply */
@@ -73,7 +75,8 @@ void update_reference_pressure(void);
 void publish_measurements(void);
 void update_heart_rate(void);
 void measure_altitude(void);
-void update_display(void);
+void initialize_altitude_measurement(void);
+void update_display(int screen_number_to_show);
 
 #ifdef __cplusplus
 }
