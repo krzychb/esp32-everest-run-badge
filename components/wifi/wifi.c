@@ -52,6 +52,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     case SYSTEM_EVENT_STA_GOT_IP:
         line[WIFI_ACTIVITY_LED_INDEX].blue = 0;
         line[WIFI_ACTIVITY_LED_INDEX].green = 40;
+        wifi_connection.result = ESP_OK;
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
@@ -60,6 +61,8 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         line[WIFI_ACTIVITY_LED_INDEX].blue = 0;
         line[WIFI_ACTIVITY_LED_INDEX].green = 0;
         line[WIFI_ACTIVITY_LED_INDEX].red = 40;
+        wifi_connection.failures++;
+        wifi_connection.result = ! ESP_OK;
         esp_wifi_connect();
         xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
         break;

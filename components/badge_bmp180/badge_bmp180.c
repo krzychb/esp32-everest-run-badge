@@ -239,7 +239,7 @@ esp_err_t badge_bmp180_init()
     if (badge_bmp180_init_done)
         return ESP_OK;
 
-    ESP_LOGD(TAG, "init called");
+    ESP_LOGD(TAG, "BMP180 init called");
 
     esp_err_t err = badge_mpr121_init();
     if (err != ESP_OK)

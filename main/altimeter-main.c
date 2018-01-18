@@ -27,16 +27,17 @@
 #include "thingspeak.h"
 
 #include "badge_power.h"
+#include "badge_leds.h"
 
 static const char* TAG = "Main";
 
 RTC_DATA_ATTR static unsigned long boot_count = 0l;
 
 // Periods in seconds
-#define DEEP_SLEEP_PERIOD                    2
-#define BATTERY_VOLTAGE_UPDATE_PERIOD        5
+#define DEEP_SLEEP_PERIOD                    5
 #define DISPLAY_UPDATE_PERIOD                5
 #define ALTITUDE_UPDATE_PERIOD               5
+#define BATTERY_VOLTAGE_UPDATE_PERIOD        5
 #define HEART_RATE_UPDATE_PERIOD            15
 #define THINGSPEAK_UPDATE_PERIOD            15
 #define REFERENCE_PRESSURE_UPDATE_PERIOD   120
@@ -51,38 +52,36 @@ void app_main()
         ESP_LOGI(TAG, "Wakeup by timer");
     } else {
         ESP_LOGI(TAG, "First time boot");
+        update_heart_rate();
         update_reference_pressure();
-        //
-        // Initialize reading of altitude climbed / descent
-        //
         initialize_altitude_measurement();
-        //
-        // ToDo: Retrieve current time from NTP
-        //
-        update_display(1);
+        measure_battery_voltage();
     }
 
-    //
-    // ToDo: Move leds_task up to see "First time boot" progress
-    //
-    xTaskCreate(&leds_task, "leds_task", 4 * 1024, NULL, 5, NULL);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
     ESP_LOGI(TAG, "Module boot count: %lu", boot_count++);
+    //
+    // ToDo: Move leds task up to see first boot status
+    //
+    esp_err_t err = badge_leds_init();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to initialize leds task, error: %d", err);
+    }
+    xTaskCreate(&leds_task, "leds_task", 4 * 1024, NULL, 5, NULL);
 
     while(1) {
         struct timeval module_time;
         gettimeofday(&module_time, NULL);
         ESP_LOGI(TAG, "Module time %lu s", module_time.tv_sec);
 
+        // Altitude Measurement
+        if (module_time.tv_sec > altitude_update.time + ALTITUDE_UPDATE_PERIOD) {
+            measure_altitude();
+        }
+
         // Measure battery voltage before Wi-Fi or BLE is on
         if (module_time.tv_sec > battery_voltage_update.time + BATTERY_VOLTAGE_UPDATE_PERIOD) {
             measure_battery_voltage();
-        }
-
-        // Reference Pressure Update
-        if (module_time.tv_sec > reference_pressure_update.time + REFERENCE_PRESSURE_UPDATE_PERIOD) {
-            update_reference_pressure();
         }
 
         // ThingSpeak Update
@@ -91,13 +90,13 @@ void app_main()
         }
 
         // Heart Rate Update
-        if (module_time.tv_sec > heart_rate_update.time + ALTITUDE_UPDATE_PERIOD) {
+        if (module_time.tv_sec > heart_rate_update.time + HEART_RATE_UPDATE_PERIOD) {
             update_heart_rate();
         }
 
-        // Altitude Measurement
-        if (module_time.tv_sec > altitude_update.time + ALTITUDE_UPDATE_PERIOD) {
-            measure_altitude();
+        // Reference Pressure Update
+        if (module_time.tv_sec > reference_pressure_update.time + REFERENCE_PRESSURE_UPDATE_PERIOD) {
+            update_reference_pressure();
         }
 
         // Update Screen

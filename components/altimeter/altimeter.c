@@ -56,6 +56,8 @@ RTC_DATA_ATTR update_status altitude_update = {0};
 RTC_DATA_ATTR update_status heart_rate_update = {0};
 RTC_DATA_ATTR update_status thingspeak_update = {0};
 RTC_DATA_ATTR update_status reference_pressure_update = {0};
+RTC_DATA_ATTR update_status wifi_connection = {0};
+
 
 // Discriminate of altitude changes to calculate cumulative altitude climbed
 #define ALTITUDE_DISRIMINATION 1.6
@@ -106,12 +108,6 @@ void update_to_now(unsigned long* time)
 
 void leds_task(void *pvParameter)
 {
-    esp_err_t err = badge_leds_init();
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to initialize leds task, error: %d", err);
-    }
-
     led show_line[6] = {0};
     led led_off = {0};
 
@@ -169,6 +165,7 @@ void update_reference_pressure(void){
                 ESP_LOGW(TAG, "Assumed standard pressure at the sea level");
             }
             reference_pressure_update.failures++;
+            reference_pressure_update.result = ! ESP_OK;
             ESP_LOGW(TAG, "Exit waiting");
             line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
             line[REF_PRESSURE_RETREIEVAL_LED_INDEX].red = 40;
@@ -186,6 +183,7 @@ void publish_measurements(void)
     line[CLOUD_POSTING_LED_INDEX].green = 40;
     thinkgspeak_initialise();
     if (network_is_alive() == true) {
+        update_to_now(&altitude_record.up_time);
         err = thinkgspeak_post_data(&altitude_record);
         update_to_now(&thingspeak_update.time);
         thingspeak_update.result = err;
@@ -234,12 +232,14 @@ void update_heart_rate(void){
             ESP_LOGI(TAG, "Waiting %d ...", count_down);
             vTaskDelay(1000 / portTICK_RATE_MS);
             if (heart_rate_update.time > last_update) {
+                heart_rate_update.result = ESP_OK;
                 line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
                 ESP_LOGI(TAG, "Update received");
                 break;
             }
             if (--count_down == 0) {
-                reference_pressure_update.failures++;
+                heart_rate_update.failures++;
+                heart_rate_update.result = ! ESP_OK;
                 ESP_LOGW(TAG, "Exit waiting");
                 line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
                 line[HEART_RATE_UPDATE_LED_INDEX].red = 40;
@@ -264,17 +264,16 @@ void measure_altitude(void)
         altitude_update.failures++;
         altitude_update.result = err;
         ESP_LOGE(TAG, "Altitude measurement init failed with error = %d", err);
-        badge_power_sdcard_disable();
         return;
     }
 
     unsigned long pressure;
     float temperature;
     float altitude;
+    ESP_LOGI(TAG, "Reading BMP180");
     err  = badge_bmp180_read_pressure(&pressure);
-    err |= badge_bmp180_read_temperature(&temperature);
     err |= badge_bmp180_read_altitude(altitude_record.reference_pressure, &altitude);
-    badge_power_sdcard_disable();
+    err |= badge_bmp180_read_temperature(&temperature);
 
     if(err != ESP_OK) {
         line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
@@ -292,13 +291,14 @@ void measure_altitude(void)
         line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
         line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
         altitude_update.failures++;
+        altitude_update.result = ! ESP_OK;
         ESP_LOGE(TAG, "Pressure range error! (%lu Pa)", pressure);
         return;
     }
 
+    altitude_record.altitude = altitude;
     altitude_record.pressure = pressure;
     altitude_record.temperature = temperature;
-    altitude_record.altitude = altitude;
     update_to_now(&altitude_update.time);
 
     ESP_LOGI(TAG, "Absolute altitude %0.1f m", altitude_record.altitude);
@@ -314,7 +314,7 @@ void measure_altitude(void)
         altitude_last = altitude_record.altitude;
         ESP_LOGD(TAG, "Altitude descent %0.1f m", altitude_record.altitude_descent);
     } else {
-        ESP_LOGW(TAG, "Altitude change is within +/- %0.1f from %0.1f m", ALTITUDE_DISRIMINATION, altitude_last);
+        ESP_LOGD(TAG, "Altitude change is within +/- %0.1f from %0.1f m", ALTITUDE_DISRIMINATION, altitude_last);
     }
 
     altitude_delta = altitude_record.altitude - climb_count_altitude_last;
@@ -332,6 +332,7 @@ void measure_altitude(void)
             altitude_record.climb_count_down++;
         }
     }
+    line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
 }
 
 void initialize_altitude_measurement(void)
@@ -392,11 +393,8 @@ void update_display(int screen_number_to_show)
     }
     iot_epaper_draw_string(display_device,  35,  2, "/\\", &epaper_font_16, failure_state ? UNCOLORED : COLORED);
 
-    //
-    // ToDo: add error tracking
-    //
     // Wi-Fi Icon
-    failure_state = true;
+    failure_state = wifi_connection.result;
     if (failure_state) {
         iot_epaper_draw_filled_rectangle(display_device, 82, 0, 122, 12, COLORED);
     } else {

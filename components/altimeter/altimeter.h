@@ -49,7 +49,7 @@ extern RTC_DATA_ATTR update_status altitude_update;
 extern RTC_DATA_ATTR update_status heart_rate_update;
 extern RTC_DATA_ATTR update_status thingspeak_update;
 extern RTC_DATA_ATTR update_status reference_pressure_update;
-extern RTC_DATA_ATTR update_status ntp_update;
+extern RTC_DATA_ATTR update_status wifi_connection;
 
 typedef struct {
     unsigned long pressure;  /*!< Pressure [Pa] measured with BM180 */
