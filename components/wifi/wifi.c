@@ -45,22 +45,20 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
     switch(event->event_id) {
     case SYSTEM_EVENT_STA_START:
-        line[WIFI_ACTIVITY_LED_INDEX].red = 0;
-        line[WIFI_ACTIVITY_LED_INDEX].blue = 40;
+        line[WIFI_ACTIVITY_LED_INDEX].red = LED_OFF;
+        line[WIFI_ACTIVITY_LED_INDEX].blue = LED_ON_MED;
         esp_wifi_connect();
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
-        line[WIFI_ACTIVITY_LED_INDEX].blue = 0;
-        line[WIFI_ACTIVITY_LED_INDEX].green = 40;
+        line[WIFI_ACTIVITY_LED_INDEX].blue = LED_OFF;
         wifi_connection.result = ESP_OK;
         xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         /* This is a workaround as ESP32 WiFi libs don't currently
            auto-reassociate. */
-        line[WIFI_ACTIVITY_LED_INDEX].blue = 0;
-        line[WIFI_ACTIVITY_LED_INDEX].green = 0;
-        line[WIFI_ACTIVITY_LED_INDEX].red = 40;
+        line[WIFI_ACTIVITY_LED_INDEX].blue = LED_OFF;
+        line[WIFI_ACTIVITY_LED_INDEX].red = LED_ON_MED;
         wifi_connection.failures++;
         wifi_connection.result = ! ESP_OK;
         esp_wifi_connect();

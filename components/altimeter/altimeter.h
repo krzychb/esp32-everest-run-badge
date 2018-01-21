@@ -34,6 +34,10 @@ typedef struct
 #define REF_PRESSURE_RETREIEVAL_LED_INDEX   1
 #define HEART_RATE_UPDATE_LED_INDEX         0
 
+#define LED_OFF          0
+#define LED_ON_MED      20
+#define LED_ON_MAX      40
+
 extern led line[];
 
 typedef struct
@@ -77,6 +81,7 @@ void update_heart_rate(void);
 void measure_altitude(void);
 void initialize_altitude_measurement(void);
 void update_display(int screen_number_to_show);
+void show_welcome_screen();
 
 #ifdef __cplusplus
 }

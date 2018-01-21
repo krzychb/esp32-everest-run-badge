@@ -42,7 +42,7 @@
 static const char* TAG = "Altimeter";
 
 #define WEATHER_DATA_RETREIVAL_TIMEOUT      5
-#define HEART_RATE_RETREIVAL_TIMEOUT        5
+#define HEART_RATE_RETREIVAL_TIMEOUT        3
 
 led line[6] = {0};
 
@@ -58,6 +58,9 @@ RTC_DATA_ATTR update_status thingspeak_update = {0};
 RTC_DATA_ATTR update_status reference_pressure_update = {0};
 RTC_DATA_ATTR update_status wifi_connection = {0};
 
+#define ALTITUDE_FOR_MER 136.5
+#define FLOORS_FOR_MER 42
+
 
 // Discriminate of altitude changes to calculate cumulative altitude climbed
 #define ALTITUDE_DISRIMINATION 1.6
@@ -65,14 +68,14 @@ RTC_DATA_ATTR static float altitude_last; // last measurement for cumulative cal
 RTC_DATA_ATTR altitude_data altitude_record = {0};
 
 // Discriminate of altitude changes for climb top/down counting
-#define CLIMB_COUNT_ALTITUDE_DISRIMINATION 10.5
+#define CLIMB_COUNT_ALTITUDE_DISRIMINATION 68
 
 #define CLIMB_COUNT_STATE_START       0x00
 #define CLIMB_COUNT_STATE_GOING_UP    0x10
 #define CLIMB_COUNT_STATE_GOING_DOWN  0x20
 
 RTC_DATA_ATTR int climb_count_state = CLIMB_COUNT_STATE_START;
-RTC_DATA_ATTR static float climb_count_altitude_last; // last measurement for climb count calculation
+RTC_DATA_ATTR static float altitude_last_for_climb_count; // last measurement for climb count calculation
 
 epaper_handle_t display_device = NULL;
 
@@ -128,7 +131,7 @@ static void weather_data_retreived(uint32_t *args)
     weather_data* weather = (weather_data*) args;
 
     altitude_record.reference_pressure = (unsigned long) (weather->pressure * 100);
-    line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
+    line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = LED_OFF;
     update_to_now(&reference_pressure_update.time);
     ESP_LOGI(TAG, "Reference pressure: %lu Pa", altitude_record.reference_pressure);
 }
@@ -139,7 +142,7 @@ void update_reference_pressure(void){
 
     ESP_LOGI(TAG, "Updating reference pressure");
     wifi_initialize();
-    line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 40;
+    line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = LED_ON_MED;
     initialise_weather_data_retrieval(60000);
     /* Period above is meant for updates in background
      * In this case module would normally go into deep sleep
@@ -155,7 +158,8 @@ void update_reference_pressure(void){
         vTaskDelay(1000 / portTICK_RATE_MS);
         if (reference_pressure_update.time != last_update) {
             ESP_LOGI(TAG, "Update received");
-            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
+            reference_pressure_update.result = ESP_OK;
+            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = LED_OFF;
             break;
         }
         if (--count_down == 0) {
@@ -167,8 +171,8 @@ void update_reference_pressure(void){
             reference_pressure_update.failures++;
             reference_pressure_update.result = ! ESP_OK;
             ESP_LOGW(TAG, "Exit waiting");
-            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = 0;
-            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].red = 40;
+            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].green = LED_OFF;
+            line[REF_PRESSURE_RETREIEVAL_LED_INDEX].red = LED_ON_MED;
             break;
         }
     }
@@ -180,7 +184,7 @@ void publish_measurements(void)
 
     ESP_LOGI(TAG, "Publishing to ThingSpeak");
     wifi_initialize();
-    line[CLOUD_POSTING_LED_INDEX].green = 40;
+    line[CLOUD_POSTING_LED_INDEX].green = LED_ON_MED;
     thinkgspeak_initialise();
     if (network_is_alive() == true) {
         update_to_now(&altitude_record.up_time);
@@ -188,11 +192,11 @@ void publish_measurements(void)
         update_to_now(&thingspeak_update.time);
         thingspeak_update.result = err;
         if (err != ESP_OK) {
-            line[CLOUD_POSTING_LED_INDEX].red = 40;
+            line[CLOUD_POSTING_LED_INDEX].red = LED_ON_MED;
             ESP_LOGE(TAG, "Failed publishing altitude record to ThingSpeak, err = %d", err);
             thingspeak_update.failures++;
         } else {
-            line[CLOUD_POSTING_LED_INDEX].green = 0;
+            line[CLOUD_POSTING_LED_INDEX].green = LED_OFF;
         }
     } else {
         ESP_LOGW(TAG, "Wi-Fi connection is missing");
@@ -217,13 +221,13 @@ void update_heart_rate(void){
 
         unsigned long last_update = heart_rate_update.time;
 
-        line[HEART_RATE_UPDATE_LED_INDEX].blue = 40;
+        line[HEART_RATE_UPDATE_LED_INDEX].blue = LED_ON_MED;
         on_heart_rate_retrieval(heart_rate_data_retreived);
         esp_err_t ret = initialise_heart_rate_retrieval();
         if (ret){
             ESP_LOGE(TAG, "Failed to initialize HR retrieval, error code = %x", ret);
-            line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
-            line[HEART_RATE_UPDATE_LED_INDEX].red = 40;
+            line[HEART_RATE_UPDATE_LED_INDEX].blue = LED_OFF;
+            line[HEART_RATE_UPDATE_LED_INDEX].red = LED_ON_MED;
         }
 
         int count_down = HEART_RATE_RETREIVAL_TIMEOUT;
@@ -233,7 +237,7 @@ void update_heart_rate(void){
             vTaskDelay(1000 / portTICK_RATE_MS);
             if (heart_rate_update.time > last_update) {
                 heart_rate_update.result = ESP_OK;
-                line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
+                line[HEART_RATE_UPDATE_LED_INDEX].blue = LED_OFF;
                 ESP_LOGI(TAG, "Update received");
                 break;
             }
@@ -241,8 +245,8 @@ void update_heart_rate(void){
                 heart_rate_update.failures++;
                 heart_rate_update.result = ! ESP_OK;
                 ESP_LOGW(TAG, "Exit waiting");
-                line[HEART_RATE_UPDATE_LED_INDEX].blue = 0;
-                line[HEART_RATE_UPDATE_LED_INDEX].red = 40;
+                line[HEART_RATE_UPDATE_LED_INDEX].blue = LED_OFF;
+                line[HEART_RATE_UPDATE_LED_INDEX].red = LED_ON_MED;
                 break;
             }
         }
@@ -254,16 +258,17 @@ void measure_altitude(void)
     esp_err_t err;
 
     ESP_LOGI(TAG, "Measuring altitude");
-    line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 40;
+    line[ALTITUDE_MEASUREMENT_LED_INDEX].green = LED_ON_MED;
 
     err = badge_bmp180_init();
 
     if(err != ESP_OK) {
-        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
-        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = LED_OFF;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = LED_ON_MED;
         altitude_update.failures++;
         altitude_update.result = err;
         ESP_LOGE(TAG, "Altitude measurement init failed with error = %d", err);
+        badge_power_sdcard_disable();
         return;
     }
 
@@ -274,10 +279,11 @@ void measure_altitude(void)
     err  = badge_bmp180_read_pressure(&pressure);
     err |= badge_bmp180_read_altitude(altitude_record.reference_pressure, &altitude);
     err |= badge_bmp180_read_temperature(&temperature);
+    badge_power_sdcard_disable();
 
     if(err != ESP_OK) {
-        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
-        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = LED_OFF;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = LED_ON_MED;
         altitude_update.failures++;
         altitude_update.result = err;
         ESP_LOGE(TAG, "Altitude measurement failed with error = %d", err);
@@ -288,8 +294,8 @@ void measure_altitude(void)
     // To Do: track potential issue with BMP180 measurement corruption
     //
     if (pressure < 92000 || pressure > 107000) {
-        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
-        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = 40;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].green = LED_OFF;
+        line[ALTITUDE_MEASUREMENT_LED_INDEX].red = LED_ON_MED;
         altitude_update.failures++;
         altitude_update.result = ! ESP_OK;
         ESP_LOGE(TAG, "Pressure range error! (%lu Pa)", pressure);
@@ -317,22 +323,22 @@ void measure_altitude(void)
         ESP_LOGD(TAG, "Altitude change is within +/- %0.1f from %0.1f m", ALTITUDE_DISRIMINATION, altitude_last);
     }
 
-    altitude_delta = altitude_record.altitude - climb_count_altitude_last;
+    altitude_delta = altitude_record.altitude - altitude_last_for_climb_count;
     if (altitude_delta > CLIMB_COUNT_ALTITUDE_DISRIMINATION) {
-        climb_count_altitude_last = altitude_record.altitude;
+        altitude_last_for_climb_count = altitude_record.altitude;
         if (climb_count_state == CLIMB_COUNT_STATE_GOING_DOWN || climb_count_state == CLIMB_COUNT_STATE_START){
             climb_count_state = CLIMB_COUNT_STATE_GOING_UP;
             altitude_record.climb_count_top++;
         }
     }
     if (altitude_delta < -CLIMB_COUNT_ALTITUDE_DISRIMINATION) {
-        climb_count_altitude_last = altitude_record.altitude;
+        altitude_last_for_climb_count = altitude_record.altitude;
         if (climb_count_state == CLIMB_COUNT_STATE_GOING_UP || climb_count_state == CLIMB_COUNT_STATE_START){
             climb_count_state = CLIMB_COUNT_STATE_GOING_DOWN;
             altitude_record.climb_count_down++;
         }
     }
-    line[ALTITUDE_MEASUREMENT_LED_INDEX].green = 0;
+    line[ALTITUDE_MEASUREMENT_LED_INDEX].green = LED_OFF;
 }
 
 void initialize_altitude_measurement(void)
@@ -341,9 +347,11 @@ void initialize_altitude_measurement(void)
     measure_altitude();
     altitude_record.altitude_climbed = 0.0;
     altitude_record.altitude_descent = 0.0;
-    ESP_LOGD(TAG, "Initial altitude %0.1f m", altitude_last);
+    altitude_last = altitude_record.altitude;
     altitude_record.climb_count_top = 0;
     altitude_record.climb_count_down = 0;
+    altitude_last_for_climb_count = altitude_record.altitude;
+    climb_count_state = CLIMB_COUNT_STATE_START;
 }
 
 void measure_battery_voltage(void)
@@ -363,24 +371,18 @@ void measure_battery_voltage(void)
             altitude_record.battery_charging ? "Yes" : "No", v_usb, v_bat);
 }
 
-void update_display(int screen_number_to_show)
+void init_display()
 {
-    char value_str[10];
-
-    if (screen_number_to_show != -1){
-        active_screen = screen_number_to_show;
-    }
-    ESP_LOGI(TAG, "Updating display to show screen %d", active_screen);
-
     static bool display_init_done = false;
 
     if (display_init_done == false) {
         display_device = iot_epaper_create(NULL, &epaper_conf);
+        iot_epaper_set_rotate(display_device, E_PAPER_ROTATE_270);
         display_init_done = true;
     }
+}
 
-    iot_epaper_set_rotate(display_device, E_PAPER_ROTATE_270);
-    iot_epaper_clean_paint(display_device, UNCOLORED);
+void show_status_line(){
 
     bool failure_state;  // false == OK
 
@@ -432,36 +434,84 @@ void update_display(int screen_number_to_show)
     }
     iot_epaper_draw_string(display_device, 265,  1, "HRM", &epaper_font_12, failure_state ? UNCOLORED : COLORED);
 
+    // Draw separation lines
+    iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
+    iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
+    iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
+    iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
+
+}
+
+void update_display(int screen_number_to_show)
+{
+    char value_str[10];
+
+    if (screen_number_to_show != -1){
+        active_screen = screen_number_to_show;
+    }
+    ESP_LOGI(TAG, "Updating display to show screen %d", active_screen);
+
+    init_display();
+
+    iot_epaper_clean_paint(display_device, UNCOLORED);
+    show_status_line();
+
     switch (active_screen) {
         case 0:
             iot_epaper_draw_string(display_device, 10,  25, "Climbed", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 10,  52, "Descent", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 10,  52, "Heart Rate", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 10,  79, "Battery", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 10, 106, "Up Time", &epaper_font_20, COLORED);
 
             memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%7.1f m", altitude_record.altitude_climbed);
+            sprintf(value_str, "%6.0f m", altitude_record.altitude_climbed);
             iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%7.1f m", altitude_record.altitude_descent);
+            sprintf(value_str, "%6d BPM", altitude_record.heart_rate);
             iot_epaper_draw_string(display_device, 155,  52, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%7.2f V", altitude_record.battery_voltage);
+            sprintf(value_str, "%6.2f V", altitude_record.battery_voltage);
             iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
             update_to_now(&altitude_record.up_time);
-            int hours   = (int) (altitude_record.up_time / 3660);
+            int hours   = (int) (altitude_record.up_time / 3600);
             int minutes = (int) ((altitude_record.up_time / 60) % 60);
             int seconds = (int) (altitude_record.up_time % 60);
             sprintf(value_str, "%2d:%02d:%02d", hours, minutes, seconds);
-            iot_epaper_draw_string(display_device, 170, 106, value_str, &epaper_font_20, COLORED);
-
-            iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
+            iot_epaper_draw_string(display_device, 127, 106, value_str, &epaper_font_20, COLORED);
             break;
         case 1:
+            iot_epaper_draw_string(display_device, 7,  25, "Climb Top", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  52, "Time/Climb", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  79, "Floors Cnt", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7, 106, "Meters Cnt", &epaper_font_20, COLORED);
+
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%9d", altitude_record.climb_count_top);
+            iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
+            if (altitude_record.climb_count_top == 0) {
+                strcpy(value_str,  "-");
+                iot_epaper_draw_string(display_device, 267,  52, value_str, &epaper_font_20, COLORED);
+                iot_epaper_draw_string(display_device, 267,  79, value_str, &epaper_font_20, COLORED);
+                iot_epaper_draw_string(display_device, 267, 106, value_str, &epaper_font_20, COLORED);
+            } else {
+                memset(value_str, 0x00, sizeof(value_str));
+                update_to_now(&altitude_record.up_time);
+                unsigned long seconds_climb = altitude_record.up_time / altitude_record.climb_count_top;
+                int hours   = (int) (seconds_climb / 3600);
+                int minutes = (int) ((seconds_climb / 60) % 60);
+                int seconds = (int) (seconds_climb % 60);
+                sprintf(value_str, "%2d:%02d:%02d", hours, minutes, seconds);
+                iot_epaper_draw_string(display_device, 170,  52, value_str, &epaper_font_20, COLORED);
+                memset(value_str, 0x00, sizeof(value_str));
+                sprintf(value_str, "%9d", altitude_record.climb_count_top * FLOORS_FOR_MER);
+                iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
+                memset(value_str, 0x00, sizeof(value_str));
+                sprintf(value_str, "%9d", (int) (altitude_record.climb_count_top * ALTITUDE_FOR_MER));
+                iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
+            }
+            break;
+        case 2:
             iot_epaper_draw_string(display_device, 7,  25, "Pressure", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7,  52, "Rf Pressure", &epaper_font_20, COLORED);
             iot_epaper_draw_string(display_device, 7,  79, "Altitude", &epaper_font_20, COLORED);
@@ -479,35 +529,6 @@ void update_display(int screen_number_to_show)
             memset(value_str, 0x00, sizeof(value_str));
             sprintf(value_str, "%7.1f C", altitude_record.temperature);
             iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
-
-            iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
-            break;
-        case 2:
-            iot_epaper_draw_string(display_device, 7,  25, "Heart Rate", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7,  52, "Battery Charging", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7,  79, "Climb Top", &epaper_font_20, COLORED);
-            iot_epaper_draw_string(display_device, 7, 106, "Climb Down", &epaper_font_20, COLORED);
-
-            memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%6d BPM", altitude_record.heart_rate);
-            iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
-            memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%s", altitude_record.battery_charging ? "Yes" : "No");
-            iot_epaper_draw_string(display_device, 253,  52, value_str, &epaper_font_20, COLORED);
-            memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%6d -", altitude_record.climb_count_top);
-            iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
-            memset(value_str, 0x00, sizeof(value_str));
-            sprintf(value_str, "%6d -", altitude_record.climb_count_down);
-            iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
-
-            iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
             break;
         case 3:
             iot_epaper_draw_string(display_device, 7,  25, "BMP180", &epaper_font_20, COLORED);
@@ -527,13 +548,27 @@ void update_display(int screen_number_to_show)
             memset(value_str, 0x00, sizeof(value_str));
             sprintf(value_str, "%6lu Err", reference_pressure_update.failures);
             iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
-
-            iot_epaper_draw_horizontal_line(display_device, 0,  20, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  47, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0,  74, 296, COLORED);
-            iot_epaper_draw_horizontal_line(display_device, 0, 101, 296, COLORED);
             break;
         case 4:
+            iot_epaper_draw_string(display_device, 7,  25, "Wi-Fi Conn", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  52, "Batt Charging", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7,  79, "Descent", &epaper_font_20, COLORED);
+            iot_epaper_draw_string(display_device, 7, 106, "Climb Down", &epaper_font_20, COLORED);
+
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6lu Err", wifi_connection.failures);
+            iot_epaper_draw_string(display_device, 155,  25, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%s", altitude_record.battery_charging ? "Yes" : "No");
+            iot_epaper_draw_string(display_device, 253,  52, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6.0f m", altitude_record.altitude_descent);
+            iot_epaper_draw_string(display_device, 155,  79, value_str, &epaper_font_20, COLORED);
+            memset(value_str, 0x00, sizeof(value_str));
+            sprintf(value_str, "%6d", altitude_record.climb_count_down);
+            iot_epaper_draw_string(display_device, 155, 106, value_str, &epaper_font_20, COLORED);
+            break;
+        case 5:
             iot_epaper_draw_string(display_device, 80,  52, "Screen", &epaper_font_24, COLORED);
             memset(value_str, 0x00, sizeof(value_str));
             sprintf(value_str, "%d", active_screen);
@@ -548,9 +583,17 @@ void update_display(int screen_number_to_show)
     iot_epaper_sleep(display_device);
 
     active_screen++;
-    if (active_screen > 3) {
+    if (active_screen > 4) {
         active_screen = 0;
     }
 
     update_to_now(&display_update.time);
+}
+
+void show_welcome_screen(){
+
+    ESP_LOGI(TAG, "Showing welcome screen");
+    init_display();
+    iot_epaper_display_frame(display_device, IMAGE_DATA);
+    iot_epaper_display_frame(display_device, IMAGE_DATA);
 }

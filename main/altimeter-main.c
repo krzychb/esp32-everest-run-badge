@@ -52,7 +52,7 @@ void app_main()
         ESP_LOGI(TAG, "Wakeup by timer");
     } else {
         ESP_LOGI(TAG, "First time boot");
-        update_heart_rate();
+        show_welcome_screen();
         update_reference_pressure();
         initialize_altitude_measurement();
         measure_battery_voltage();

@@ -87,12 +87,54 @@ The last two charts present application up time and battery voltage.
 
 ![alt text](pictures/thingspeak-up-time-battery-voltage.png "Sample measurement of application up time and battery voltage")
 
+## MER 2018 Measurements
+
+On 20 January 2017 from 13:00 till 23:20 I have been climbing Marriott hotel in Warsaw during [Marriott Everest Run](http://everestrun.pl/). The start was at floor -1 and finish at floor 41, the total of 42 floors or 136.5 meters. I made this distance 33 times climbing total of 4504.5 m in 10 hours and 20 min. 
+
+
+
+| ![alt text](pictures/mer-2018-altitude.png "MER 2018 - measurement of altitude") | ![alt text](pictures/mer-2018-heart-rate.png "MER 2018 - measurement of heart rate") |
+|:---:|:---:|
+| MER 2018 - measurement of altitude | MER 2018 - measurement of heart rate |
+
+
+Total altitude climbed and descent is shown on next two charts below.
+
+| ![alt text](pictures/mer-2018-altitude-climbed.png "MER 2018 - measurement of altitude climbed") | ![alt text](pictures/mer-2018-altitude-descent.png "MER 2018 - measurement of altitude descent") |
+|:---:|:---:|
+| MER 2018 - measurement of altitude climbed | MER 2018 - measurement of altitude descent |
+
+The altitude is calculated basing on pressure measured with BM180 sensor, see chart on the left, and reference pressure obtained from the OpenWeatehrMap service, see chart on the right. During MER 2018 the reference pressure was going slowly down, that is visible on both charts. The OpenWeatherMap provides resolution of measurement of 100 Pa that is visible in step changes on the chart on the right. As result of each step change of the reference pressure there was a corresponding step change of the altitude (see chart above) of about 10 m. In next application I am going to switch to service that provides 10 Pa o better resolution of the reference pressure.
+
+| ![alt text](pictures/mer-2018-pressure.png "MER 2018 - measurement of pressure") | ![alt text](pictures/mer-2018-reference-pressure.png "MER 2018 - measurement of reference pressure") |
+|:---:|:---:|
+| MER 2018 - measurement of pressure | MER 2018 - measurement of reference pressure |
+
+The last two charts present application up time and SHA 2017 badge battery voltage.
+
+| ![alt text](pictures/mer-2018-up-time.png "MER 2018 - measurement of up time") | ![alt text](pictures/mer-2018-battery-voltage.png "MER 2018 - measurement of battery voltage") |
+|:---:|:---:|
+| MER 2018 - measurement of up time | MER 2018 - measurement of battery voltage |
+
+In first five hours I was able reach the top 15 times. In the remaining 4 hours 20 min I made it 18 times because there were less people climbing and queues to two elevators taking us down were much shorter.
+
+| ![alt text](pictures/mer-2018-first-half-altitude.png "MER 2018 - measurement of altitude during first half of climbing") | ![alt text](pictures/mer-2018-second-half-altitude.png "MER 2018 - measurement of altitude during second half of climbing") |
+|:---:|:---:|
+| MER 2018 - measurement of altitude during first half of climbing | MER 2018 - measurement of altitude during second half of climbing |
+
+Climbing couple of thousands meters takes several hours and requires good physical and mental preparation. I am totally exhausted just after completion, kind of surprised I was able to do it and not sure I would do it again. Next day I am ready to do once more.
+
+| ![alt text](pictures/mer-2018-equipmentf-for-the-challange.jpg "Equipment for MER 2018") | ![alt text](pictures/mer-2018-certificate-of-completion.jpg "Certification of completion of MER 2018") |
+|:---:|:---:|
+| Equipment for MER 2018 | Certification of completion of MER 2018 |
+
 
 ## Acknowledgments
 
 This repository has been prepared thanks to great hardware and software developed by the following teams and individuals:
 
 * [SHA2017 Badge Team](https://twitter.com/sha2017badge), love the hardware and the software you have carefully designed and implemented for SHA2017!
+* [Fundacja Wsparcia Ratownictwa RK](https://www.facebook.com/FundacjaRK) organizing open for everybody weekly climbing trainings that concludes for several of participants in yearly [Marriott Everest Run](http://everestrun.pl/).
 * Espressif team that develops and maintains [esp-idf](https://github.com/espressif/esp-idf)  repository. With each update I am each time amazed, how stable this code works and how great functionality it provides.
 * [esp-iot-solution](https://github.com/espressif/esp-iot-solution) team that developed clean and easy to follow [epaper](https://github.com/espressif/esp-iot-solution/tree/master/components/spi_devices/epaper/test) component for similar type of ePaper display like on SHA2017 Badge. I reused it almost entirely in this project.
 * Waveshare that provides [great documentation](https://www.waveshare.com/wiki/2.9inch_e-Paper_Module) and [really user friendly demo code](https://www.waveshare.com/wiki/File:2.9inch_e-Paper_Module_code.7z). It was instrumental to help me understand how to control ePaper displays and adapt existing ESP-IDF code to control such displays.
